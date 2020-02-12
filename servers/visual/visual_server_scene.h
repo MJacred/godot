@@ -159,7 +159,7 @@ public:
 		AABB transformed_aabb;
 		AABB *custom_aabb; // <Zylann> would using aabb directly with a bool be better?
 		float extra_margin;
-		uint32_t object_id;
+		ObjectID object_id;
 
 		float lod_begin;
 		float lod_end;
@@ -196,7 +196,6 @@ public:
 
 			extra_margin = 0;
 
-			object_id = 0;
 			visible = true;
 
 			lod_begin = 0;
