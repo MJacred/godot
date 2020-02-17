@@ -282,12 +282,12 @@ void ResourceImporterTexture::_save_stex(const Ref<Image> &p_image, const String
 					image->shrink_x2();
 				}
 
-				PoolVector<uint8_t> data = Image::lossless_packer(image);
+				Vector<uint8_t> data = Image::lossless_packer(p_image->get_image_from_mipmap(i));
 				int data_len = data.size();
 				f->store_32(data_len);
 
-				PoolVector<uint8_t>::Read r = data.read();
-				f->store_buffer(r.ptr(), data_len);
+				const uint8_t *r = data.ptr();
+				f->store_buffer(r, data_len);
 			}
 
 		} break;
@@ -307,16 +307,12 @@ void ResourceImporterTexture::_save_stex(const Ref<Image> &p_image, const String
 
 			for (int i = 0; i < mmc; i++) {
 
-				if (i > 0) {
-					image->shrink_x2();
-				}
-
-				PoolVector<uint8_t> data = Image::lossy_packer(image, p_lossy_quality);
+				Vector<uint8_t> data = Image::lossy_packer(p_image->get_image_from_mipmap(i), p_lossy_quality);
 				int data_len = data.size();
 				f->store_32(data_len);
 
-				PoolVector<uint8_t>::Read r = data.read();
-				f->store_buffer(r.ptr(), data_len);
+				const uint8_t *r = data.ptr();
+				f->store_buffer(r, data_len);
 			}
 		} break;
 		case COMPRESS_VIDEO_RAM: {
@@ -346,10 +342,10 @@ void ResourceImporterTexture::_save_stex(const Ref<Image> &p_image, const String
 
 			f->store_32(format);
 
-			PoolVector<uint8_t> data = image->get_data();
+			Vector<uint8_t> data = image->get_data();
 			int dl = data.size();
-			PoolVector<uint8_t>::Read r = data.read();
-			f->store_buffer(r.ptr(), dl);
+			const uint8_t *r = data.ptr();
+			f->store_buffer(r, dl);
 		} break;
 		case COMPRESS_UNCOMPRESSED: {
 
@@ -360,16 +356,91 @@ void ResourceImporterTexture::_save_stex(const Ref<Image> &p_image, const String
 				image->clear_mipmaps();
 			}
 
-			format |= image->get_format();
-			f->store_32(format);
-
-			PoolVector<uint8_t> data = image->get_data();
+			Vector<uint8_t> data = p_image->get_data();
 			int dl = data.size();
-			PoolVector<uint8_t>::Read r = data.read();
+			const uint8_t *r = data.ptr();
 
-			f->store_buffer(r.ptr(), dl);
+			f->store_buffer(r, dl);
 
 		} break;
+		case COMPRESS_BASIS_UNIVERSAL: {
+
+			f->store_32(StreamTexture::DATA_FORMAT_BASIS_UNIVERSAL);
+			f->store_16(p_image->get_width());
+			f->store_16(p_image->get_height());
+			f->store_32(p_image->get_mipmap_count());
+			f->store_32(p_image->get_format());
+
+			for (int i = 0; i < p_image->get_mipmap_count() + 1; i++) {
+
+				Vector<uint8_t> data = Image::basis_universal_packer(p_image->get_image_from_mipmap(i), p_channels);
+				int data_len = data.size();
+				f->store_32(data_len);
+
+				const uint8_t *r = data.ptr();
+				f->store_buffer(r, data_len);
+			}
+		} break;
+	}
+}
+
+void ResourceImporterTexture::_save_stex(const Ref<Image> &p_image, const String &p_to_path, CompressMode p_compress_mode, float p_lossy_quality, Image::CompressMode p_vram_compression, bool p_mipmaps, bool p_streamable, bool p_detect_3d, bool p_detect_roughness, bool p_force_rgbe, bool p_detect_normal, bool p_force_normal, bool p_srgb_friendly, bool p_force_po2_for_compressed, uint32_t p_limit_mipmap, const Ref<Image> &p_normal, Image::RoughnessChannel p_roughness_channel) {
+
+	FileAccess *f = FileAccess::open(p_to_path, FileAccess::WRITE);
+	f->store_8('G');
+	f->store_8('S');
+	f->store_8('T');
+	f->store_8('2'); //godot streamable texture 2D
+
+	//format version
+	f->store_32(StreamTexture::FORMAT_VERSION);
+	//texture may be resized later, so original size must be saved first
+	f->store_32(p_image->get_width());
+	f->store_32(p_image->get_height());
+
+	uint32_t flags = 0;
+	if (p_streamable)
+		flags |= StreamTexture::FORMAT_BIT_STREAM;
+	if (p_mipmaps)
+		flags |= StreamTexture::FORMAT_BIT_HAS_MIPMAPS; //mipmaps bit
+	if (p_detect_3d)
+		flags |= StreamTexture::FORMAT_BIT_DETECT_3D;
+	if (p_detect_roughness)
+		flags |= StreamTexture::FORMAT_BIT_DETECT_ROUGNESS;
+	if (p_detect_normal)
+		flags |= StreamTexture::FORMAT_BIT_DETECT_NORMAL;
+
+	f->store_32(flags);
+	f->store_32(p_limit_mipmap);
+	//reserverd for future use
+	f->store_32(0);
+	f->store_32(0);
+	f->store_32(0);
+
+	/*
+	print_line("streamable " + itos(p_streamable));
+	print_line("mipmaps " + itos(p_mipmaps));
+	print_line("detect_3d " + itos(p_detect_3d));
+	print_line("roughness " + itos(p_detect_roughness));
+	print_line("normal " + itos(p_detect_normal));
+*/
+
+	if ((p_compress_mode == COMPRESS_LOSSLESS || p_compress_mode == COMPRESS_LOSSY) && p_image->get_format() > Image::FORMAT_RGBA8) {
+		p_compress_mode = COMPRESS_VRAM_UNCOMPRESSED; //these can't go as lossy
+	}
+
+	Ref<Image> image = p_image->duplicate();
+
+	if (((p_compress_mode == COMPRESS_BASIS_UNIVERSAL) || (p_compress_mode == COMPRESS_VRAM_COMPRESSED && p_force_po2_for_compressed)) && p_mipmaps) {
+		image->resize_to_po2();
+	}
+
+	if (p_mipmaps && (!image->has_mipmaps() || p_force_normal)) {
+		image->generate_mipmaps(p_force_normal);
+	}
+
+	if (!p_mipmaps) {
+		image->clear_mipmaps();
 	}
 
 	memdelete(f);
@@ -449,13 +520,11 @@ Error ResourceImporterTexture::import(const String &p_source_file, const String 
 		int height = image->get_height();
 		int width = image->get_width();
 
-		image->lock();
 		for (int i = 0; i < width; i++) {
 			for (int j = 0; j < height; j++) {
 				image->set_pixel(i, j, image->get_pixel(i, j).inverted());
 			}
 		}
-		image->unlock();
 	}
 
 	bool detect_3d = p_options["detect_3d"];

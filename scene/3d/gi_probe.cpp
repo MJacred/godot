@@ -33,31 +33,85 @@
 #include "core/os/os.h"
 
 #include "mesh_instance.h"
-#include "voxel_light_baker.h"
+#include "voxelizer.h"
+
+void GIProbeData::_set_data(const Dictionary &p_data) {
+	ERR_FAIL_COND(!p_data.has("bounds"));
+	ERR_FAIL_COND(!p_data.has("octree_size"));
+	ERR_FAIL_COND(!p_data.has("octree_cells"));
+	ERR_FAIL_COND(!p_data.has("octree_data"));
+	ERR_FAIL_COND(!p_data.has("octree_df") && !p_data.has("octree_df_png"));
+	ERR_FAIL_COND(!p_data.has("level_counts"));
+	ERR_FAIL_COND(!p_data.has("to_cell_xform"));
+
+	AABB bounds = p_data["bounds"];
+	Vector3 octree_size = p_data["octree_size"];
+	Vector<uint8_t> octree_cells = p_data["octree_cells"];
+	Vector<uint8_t> octree_data = p_data["octree_data"];
+
+	Vector<uint8_t> octree_df;
+	if (p_data.has("octree_df")) {
+		octree_df = p_data["octree_df"];
+	} else if (p_data.has("octree_df_png")) {
+		Vector<uint8_t> octree_df_png = p_data["octree_df_png"];
+		Ref<Image> img;
+		img.instance();
+		Error err = img->load_png_from_buffer(octree_df_png);
+		ERR_FAIL_COND(err != OK);
+		ERR_FAIL_COND(img->get_format() != Image::FORMAT_L8);
+		octree_df = img->get_data();
+	}
+	Vector<int> octree_levels = p_data["level_counts"];
+	Transform to_cell_xform = p_data["to_cell_xform"];
+
+	allocate(to_cell_xform, bounds, octree_size, octree_cells, octree_data, octree_df, octree_levels);
+}
+
+Dictionary GIProbeData::_get_data() const {
+	Dictionary d;
+	d["bounds"] = get_bounds();
+	Vector3i otsize = get_octree_size();
+	d["octree_size"] = Vector3(otsize);
+	d["octree_cells"] = get_octree_cells();
+	d["octree_data"] = get_data_cells();
+	if (otsize != Vector3i()) {
+		Ref<Image> img;
+		img.instance();
+		img->create(otsize.x * otsize.y, otsize.z, false, Image::FORMAT_L8, get_distance_field());
+		Vector<uint8_t> df_png = img->save_png_to_buffer();
+		ERR_FAIL_COND_V(df_png.size() == 0, Dictionary());
+		d["octree_df_png"] = df_png;
+	} else {
+		d["octree_df"] = Vector<uint8_t>();
+	}
 
 void GIProbeData::set_bounds(const AABB &p_bounds) {
 
-	VS::get_singleton()->gi_probe_set_bounds(probe, p_bounds);
+void GIProbeData::allocate(const Transform &p_to_cell_xform, const AABB &p_aabb, const Vector3 &p_octree_size, const Vector<uint8_t> &p_octree_cells, const Vector<uint8_t> &p_data_cells, const Vector<uint8_t> &p_distance_field, const Vector<int> &p_level_counts) {
+	VS::get_singleton()->gi_probe_allocate(probe, p_to_cell_xform, p_aabb, p_octree_size, p_octree_cells, p_data_cells, p_distance_field, p_level_counts);
+	bounds = p_aabb;
+	to_cell_xform = p_to_cell_xform;
+	octree_size = p_octree_size;
 }
 
 AABB GIProbeData::get_bounds() const {
-
-	return VS::get_singleton()->gi_probe_get_bounds(probe);
+	return bounds;
+}
+Vector3 GIProbeData::get_octree_size() const {
+	return octree_size;
+}
+Vector<uint8_t> GIProbeData::get_octree_cells() const {
+	return VS::get_singleton()->gi_probe_get_octree_cells(probe);
+}
+Vector<uint8_t> GIProbeData::get_data_cells() const {
+	return VS::get_singleton()->gi_probe_get_data_cells(probe);
+}
+Vector<uint8_t> GIProbeData::get_distance_field() const {
+	return VS::get_singleton()->gi_probe_get_distance_field(probe);
 }
 
-void GIProbeData::set_cell_size(float p_size) {
-
-	VS::get_singleton()->gi_probe_set_cell_size(probe, p_size);
-}
-
-float GIProbeData::get_cell_size() const {
-
-	return VS::get_singleton()->gi_probe_get_cell_size(probe);
-}
-
-void GIProbeData::set_to_cell_xform(const Transform &p_xform) {
-
-	VS::get_singleton()->gi_probe_set_to_cell_xform(probe, p_xform);
+Vector<int> GIProbeData::get_level_counts() const {
+	return VS::get_singleton()->gi_probe_get_level_counts(probe);
 }
 
 Transform GIProbeData::get_to_cell_xform() const {
@@ -454,17 +508,13 @@ void GIProbe::bake(Node *p_from_node, bool p_create_visual_debug) {
 		if (probe_data.is_null())
 			probe_data.instance();
 
-		probe_data->set_bounds(AABB(-extents, extents * 2.0));
-		probe_data->set_cell_size(baker.get_cell_size());
-		probe_data->set_dynamic_data(data);
-		probe_data->set_dynamic_range(dynamic_range);
-		probe_data->set_energy(energy);
-		probe_data->set_bias(bias);
-		probe_data->set_normal_bias(normal_bias);
-		probe_data->set_propagation(propagation);
-		probe_data->set_interior(interior);
-		probe_data->set_compress(compress);
-		probe_data->set_to_cell_xform(baker.get_to_cell_space_xform());
+		if (bake_step_function) {
+			bake_step_function(pmc++, RTR("Generating Distance Field"));
+		}
+
+		Vector<uint8_t> df = baker.get_sdf_3d_image();
+
+		probe_data->allocate(baker.get_to_cell_space_xform(), AABB(-extents, extents * 2.0), baker.get_giprobe_octree_size(), baker.get_giprobe_octree_cells(), baker.get_giprobe_data_cells(), df, baker.get_giprobe_level_cell_count());
 
 		set_probe_data(probe_data);
 	}
@@ -484,9 +534,9 @@ AABB GIProbe::get_aabb() const {
 	return AABB(-extents, extents * 2);
 }
 
-PoolVector<Face3> GIProbe::get_faces(uint32_t p_usage_flags) const {
+Vector<Face3> GIProbe::get_faces(uint32_t p_usage_flags) const {
 
-	return PoolVector<Face3>();
+	return Vector<Face3>();
 }
 
 String GIProbe::get_configuration_warning() const {

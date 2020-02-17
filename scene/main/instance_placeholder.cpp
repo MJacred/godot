@@ -120,7 +120,7 @@ void InstancePlaceholder::replace_by_instance(const Ref<PackedScene> &p_custom_s
 Dictionary InstancePlaceholder::get_stored_values(bool p_with_order) {
 
 	Dictionary ret;
-	PoolStringArray order;
+	PackedStringArray order;
 
 	for (List<PropSet>::Element *E = stored_values.front(); E; E = E->next()) {
 		ret[E->get().name] = E->get().value;

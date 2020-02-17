@@ -434,6 +434,36 @@ String EditorExportPlatformIOS::_get_cpp_code() {
 	return result;
 }
 
+void EditorExportPlatformIOS::_blend_and_rotate(Ref<Image> &p_dst, Ref<Image> &p_src, bool p_rot) {
+
+	ERR_FAIL_COND(p_dst.is_null());
+	ERR_FAIL_COND(p_src.is_null());
+
+	int sw = p_rot ? p_src->get_height() : p_src->get_width();
+	int sh = p_rot ? p_src->get_width() : p_src->get_height();
+
+	int x_pos = (p_dst->get_width() - sw) / 2;
+	int y_pos = (p_dst->get_height() - sh) / 2;
+
+	int xs = (x_pos >= 0) ? 0 : -x_pos;
+	int ys = (y_pos >= 0) ? 0 : -y_pos;
+
+	if (sw + x_pos > p_dst->get_width()) sw = p_dst->get_width() - x_pos;
+	if (sh + y_pos > p_dst->get_height()) sh = p_dst->get_height() - y_pos;
+
+	for (int y = ys; y < sh; y++) {
+		for (int x = xs; x < sw; x++) {
+			Color sc = p_rot ? p_src->get_pixel(p_src->get_width() - y - 1, x) : p_src->get_pixel(x, y);
+			Color dc = p_dst->get_pixel(x_pos + x, y_pos + y);
+			dc.r = (double)(sc.a * sc.r + dc.a * (1.0 - sc.a) * dc.r);
+			dc.g = (double)(sc.a * sc.g + dc.a * (1.0 - sc.a) * dc.g);
+			dc.b = (double)(sc.a * sc.b + dc.a * (1.0 - sc.a) * dc.b);
+			dc.a = (double)(sc.a + dc.a * (1.0 - sc.a));
+			p_dst->set_pixel(x_pos + x, y_pos + y, dc);
+		}
+	}
+}
+
 struct IconInfo {
 	const char *preset_key;
 	const char *idiom;

@@ -49,22 +49,18 @@ bool PowerUWP::UpdatePowerInfo() {
 	return false;
 }
 
-OS::PowerState PowerUWP::get_power_state() {
-	if (UpdatePowerInfo()) {
-		return power_state;
-	} else {
-		WARN_PRINT("Power management is not implemented on this platform, defaulting to POWERSTATE_UNKNOWN");
-		return OS::POWERSTATE_UNKNOWN;
+Vector<uint8_t> RenderingDevice::shader_compile_from_source(ShaderStage p_stage, const String &p_source_code, ShaderLanguage p_language, String *r_error, bool p_allow_cache) {
+	if (p_allow_cache && cache_function) {
+		Vector<uint8_t> cache = cache_function(p_stage, p_source_code, p_language);
+		if (cache.size()) {
+			return cache;
+		}
 	}
 }
 
-int PowerUWP::get_power_seconds_left() {
-	if (UpdatePowerInfo()) {
-		return nsecs_left;
-	} else {
-		WARN_PRINT("Power management is not implemented on this platform, defaulting to -1");
-		return -1;
-	}
+	ERR_FAIL_COND_V(!compile_function, Vector<uint8_t>());
+
+	return compile_function(p_stage, p_source_code, p_language, r_error);
 }
 
 int PowerUWP::get_power_percent_left() {

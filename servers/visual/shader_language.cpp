@@ -2558,6 +2558,148 @@ Variant ShaderLanguage::constant_value_to_variant(const Vector<ShaderLanguage::C
 	return Variant();
 }
 
+PropertyInfo ShaderLanguage::uniform_to_property_info(const ShaderNode::Uniform &p_uniform) {
+	PropertyInfo pi;
+	switch (p_uniform.type) {
+		case ShaderLanguage::TYPE_VOID: pi.type = Variant::NIL; break;
+		case ShaderLanguage::TYPE_BOOL: pi.type = Variant::BOOL; break;
+		case ShaderLanguage::TYPE_BVEC2:
+			pi.type = Variant::INT;
+			pi.hint = PROPERTY_HINT_FLAGS;
+			pi.hint_string = "x,y";
+			break;
+		case ShaderLanguage::TYPE_BVEC3:
+			pi.type = Variant::INT;
+			pi.hint = PROPERTY_HINT_FLAGS;
+			pi.hint_string = "x,y,z";
+			break;
+		case ShaderLanguage::TYPE_BVEC4:
+			pi.type = Variant::INT;
+			pi.hint = PROPERTY_HINT_FLAGS;
+			pi.hint_string = "x,y,z,w";
+			break;
+		case ShaderLanguage::TYPE_UINT:
+		case ShaderLanguage::TYPE_INT: {
+			pi.type = Variant::INT;
+			if (p_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_RANGE) {
+				pi.hint = PROPERTY_HINT_RANGE;
+				pi.hint_string = rtos(p_uniform.hint_range[0]) + "," + rtos(p_uniform.hint_range[1]);
+			}
+
+		} break;
+		case ShaderLanguage::TYPE_IVEC2:
+		case ShaderLanguage::TYPE_IVEC3:
+		case ShaderLanguage::TYPE_IVEC4:
+		case ShaderLanguage::TYPE_UVEC2:
+		case ShaderLanguage::TYPE_UVEC3:
+		case ShaderLanguage::TYPE_UVEC4: {
+
+			pi.type = Variant::PACKED_INT_ARRAY;
+		} break;
+		case ShaderLanguage::TYPE_FLOAT: {
+			pi.type = Variant::REAL;
+			if (p_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_RANGE) {
+				pi.hint = PROPERTY_HINT_RANGE;
+				pi.hint_string = rtos(p_uniform.hint_range[0]) + "," + rtos(p_uniform.hint_range[1]) + "," + rtos(p_uniform.hint_range[2]);
+			}
+
+		} break;
+		case ShaderLanguage::TYPE_VEC2: pi.type = Variant::VECTOR2; break;
+		case ShaderLanguage::TYPE_VEC3: pi.type = Variant::VECTOR3; break;
+		case ShaderLanguage::TYPE_VEC4: {
+			if (p_uniform.hint == ShaderLanguage::ShaderNode::Uniform::HINT_COLOR) {
+				pi.type = Variant::COLOR;
+			} else {
+				pi.type = Variant::PLANE;
+			}
+		} break;
+		case ShaderLanguage::TYPE_MAT2: pi.type = Variant::TRANSFORM2D; break;
+		case ShaderLanguage::TYPE_MAT3: pi.type = Variant::BASIS; break;
+		case ShaderLanguage::TYPE_MAT4: pi.type = Variant::TRANSFORM; break;
+		case ShaderLanguage::TYPE_SAMPLER2D:
+		case ShaderLanguage::TYPE_ISAMPLER2D:
+		case ShaderLanguage::TYPE_USAMPLER2D: {
+
+			pi.type = Variant::OBJECT;
+			pi.hint = PROPERTY_HINT_RESOURCE_TYPE;
+			pi.hint_string = "Texture2D";
+		} break;
+		case ShaderLanguage::TYPE_SAMPLER2DARRAY:
+		case ShaderLanguage::TYPE_ISAMPLER2DARRAY:
+		case ShaderLanguage::TYPE_USAMPLER2DARRAY: {
+
+			pi.type = Variant::OBJECT;
+			pi.hint = PROPERTY_HINT_RESOURCE_TYPE;
+			pi.hint_string = "TextureArray";
+		} break;
+		case ShaderLanguage::TYPE_SAMPLER3D:
+		case ShaderLanguage::TYPE_ISAMPLER3D:
+		case ShaderLanguage::TYPE_USAMPLER3D: {
+			pi.type = Variant::OBJECT;
+			pi.hint = PROPERTY_HINT_RESOURCE_TYPE;
+			pi.hint_string = "Texture3D";
+		} break;
+		case ShaderLanguage::TYPE_SAMPLERCUBE: {
+
+			pi.type = Variant::OBJECT;
+			pi.hint = PROPERTY_HINT_RESOURCE_TYPE;
+			pi.hint_string = "CubeMap";
+		} break;
+		case ShaderLanguage::TYPE_STRUCT: {
+			// FIXME: Implement this.
+		} break;
+	}
+	return pi;
+}
+
+uint32_t ShaderLanguage::get_type_size(DataType p_type) {
+	switch (p_type) {
+		case TYPE_VOID:
+			return 0;
+		case TYPE_BOOL:
+		case TYPE_INT:
+		case TYPE_UINT:
+		case TYPE_FLOAT:
+			return 4;
+		case TYPE_BVEC2:
+		case TYPE_IVEC2:
+		case TYPE_UVEC2:
+		case TYPE_VEC2:
+			return 8;
+		case TYPE_BVEC3:
+		case TYPE_IVEC3:
+		case TYPE_UVEC3:
+		case TYPE_VEC3:
+			return 12;
+		case TYPE_BVEC4:
+		case TYPE_IVEC4:
+		case TYPE_UVEC4:
+		case TYPE_VEC4:
+			return 16;
+		case TYPE_MAT2:
+			return 8;
+		case TYPE_MAT3:
+			return 12;
+		case TYPE_MAT4:
+			return 16;
+		case TYPE_SAMPLER2D:
+		case TYPE_ISAMPLER2D:
+		case TYPE_USAMPLER2D:
+		case TYPE_SAMPLER2DARRAY:
+		case TYPE_ISAMPLER2DARRAY:
+		case TYPE_USAMPLER2DARRAY:
+		case TYPE_SAMPLER3D:
+		case TYPE_ISAMPLER3D:
+		case TYPE_USAMPLER3D:
+		case TYPE_SAMPLERCUBE:
+			return 4; //not really, but useful for indices
+		case TYPE_STRUCT:
+			// FIXME: Implement.
+			return 0;
+	}
+	return 0;
+}
+
 void ShaderLanguage::get_keyword_list(List<String> *r_keywords) {
 
 	Set<String> kws;

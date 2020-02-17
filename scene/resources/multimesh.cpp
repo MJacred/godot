@@ -31,17 +31,20 @@
 #include "multimesh.h"
 #include "servers/visual_server.h"
 
-void MultiMesh::_set_transform_array(const PoolVector<Vector3> &p_array) {
+#ifndef DISABLE_DEPRECATED
+// Kept for compatibility from 3.x to 4.0.
+
+void MultiMesh::_set_transform_array(const Vector<Vector3> &p_array) {
 	if (transform_format != TRANSFORM_3D)
 		return;
 
-	const PoolVector<Vector3> &xforms = p_array;
+	const Vector<Vector3> &xforms = p_array;
 	int len = xforms.size();
 	ERR_FAIL_COND((len / 4) != instance_count);
 	if (len == 0)
 		return;
 
-	PoolVector<Vector3>::Read r = xforms.read();
+	const Vector3 *r = xforms.ptr();
 
 	for (int i = 0; i < len / 4; i++) {
 
@@ -55,18 +58,18 @@ void MultiMesh::_set_transform_array(const PoolVector<Vector3> &p_array) {
 	}
 }
 
-PoolVector<Vector3> MultiMesh::_get_transform_array() const {
+Vector<Vector3> MultiMesh::_get_transform_array() const {
 
 	if (transform_format != TRANSFORM_3D)
-		return PoolVector<Vector3>();
+		return Vector<Vector3>();
 
 	if (instance_count == 0)
-		return PoolVector<Vector3>();
+		return Vector<Vector3>();
 
-	PoolVector<Vector3> xforms;
+	Vector<Vector3> xforms;
 	xforms.resize(instance_count * 4);
 
-	PoolVector<Vector3>::Write w = xforms.write();
+	Vector3 *w = xforms.ptrw();
 
 	for (int i = 0; i < instance_count; i++) {
 
@@ -80,18 +83,18 @@ PoolVector<Vector3> MultiMesh::_get_transform_array() const {
 	return xforms;
 }
 
-void MultiMesh::_set_transform_2d_array(const PoolVector<Vector2> &p_array) {
+void MultiMesh::_set_transform_2d_array(const Vector<Vector2> &p_array) {
 
 	if (transform_format != TRANSFORM_2D)
 		return;
 
-	const PoolVector<Vector2> &xforms = p_array;
+	const Vector<Vector2> &xforms = p_array;
 	int len = xforms.size();
 	ERR_FAIL_COND((len / 3) != instance_count);
 	if (len == 0)
 		return;
 
-	PoolVector<Vector2>::Read r = xforms.read();
+	const Vector2 *r = xforms.ptr();
 
 	for (int i = 0; i < len / 3; i++) {
 
@@ -104,18 +107,18 @@ void MultiMesh::_set_transform_2d_array(const PoolVector<Vector2> &p_array) {
 	}
 }
 
-PoolVector<Vector2> MultiMesh::_get_transform_2d_array() const {
+Vector<Vector2> MultiMesh::_get_transform_2d_array() const {
 
 	if (transform_format != TRANSFORM_2D)
-		return PoolVector<Vector2>();
+		return Vector<Vector2>();
 
 	if (instance_count == 0)
-		return PoolVector<Vector2>();
+		return Vector<Vector2>();
 
-	PoolVector<Vector2> xforms;
+	Vector<Vector2> xforms;
 	xforms.resize(instance_count * 3);
 
-	PoolVector<Vector2>::Write w = xforms.write();
+	Vector2 *w = xforms.ptrw();
 
 	for (int i = 0; i < instance_count; i++) {
 
@@ -128,15 +131,15 @@ PoolVector<Vector2> MultiMesh::_get_transform_2d_array() const {
 	return xforms;
 }
 
-void MultiMesh::_set_color_array(const PoolVector<Color> &p_array) {
+void MultiMesh::_set_color_array(const Vector<Color> &p_array) {
 
-	const PoolVector<Color> &colors = p_array;
+	const Vector<Color> &colors = p_array;
 	int len = colors.size();
 	if (len == 0)
 		return;
 	ERR_FAIL_COND(len != instance_count);
 
-	PoolVector<Color>::Read r = colors.read();
+	const Color *r = colors.ptr();
 
 	for (int i = 0; i < len; i++) {
 
@@ -144,12 +147,12 @@ void MultiMesh::_set_color_array(const PoolVector<Color> &p_array) {
 	}
 }
 
-PoolVector<Color> MultiMesh::_get_color_array() const {
+Vector<Color> MultiMesh::_get_color_array() const {
 
-	if (instance_count == 0 || color_format == COLOR_NONE)
-		return PoolVector<Color>();
+	if (instance_count == 0 || !use_colors)
+		return Vector<Color>();
 
-	PoolVector<Color> colors;
+	Vector<Color> colors;
 	colors.resize(instance_count);
 
 	for (int i = 0; i < instance_count; i++) {
@@ -160,15 +163,15 @@ PoolVector<Color> MultiMesh::_get_color_array() const {
 	return colors;
 }
 
-void MultiMesh::_set_custom_data_array(const PoolVector<Color> &p_array) {
+void MultiMesh::_set_custom_data_array(const Vector<Color> &p_array) {
 
-	const PoolVector<Color> &custom_datas = p_array;
+	const Vector<Color> &custom_datas = p_array;
 	int len = custom_datas.size();
 	if (len == 0)
 		return;
 	ERR_FAIL_COND(len != instance_count);
 
-	PoolVector<Color>::Read r = custom_datas.read();
+	const Color *r = custom_datas.ptr();
 
 	for (int i = 0; i < len; i++) {
 
@@ -176,12 +179,12 @@ void MultiMesh::_set_custom_data_array(const PoolVector<Color> &p_array) {
 	}
 }
 
-PoolVector<Color> MultiMesh::_get_custom_data_array() const {
+Vector<Color> MultiMesh::_get_custom_data_array() const {
 
-	if (instance_count == 0 || custom_data_format == CUSTOM_DATA_NONE)
-		return PoolVector<Color>();
+	if (instance_count == 0 || !use_custom_data)
+		return Vector<Color>();
 
-	PoolVector<Color> custom_datas;
+	Vector<Color> custom_datas;
 	custom_datas.resize(instance_count);
 
 	for (int i = 0; i < instance_count; i++) {
@@ -191,6 +194,16 @@ PoolVector<Color> MultiMesh::_get_custom_data_array() const {
 
 	return custom_datas;
 }
+#endif // DISABLE_DEPRECATED
+
+void MultiMesh::set_buffer(const Vector<float> &p_buffer) {
+	VS::get_singleton()->multimesh_set_buffer(multimesh, p_buffer);
+}
+
+Vector<float> MultiMesh::get_buffer() const {
+	return VS::get_singleton()->multimesh_get_buffer(multimesh);
+}
+
 void MultiMesh::set_mesh(const Ref<Mesh> &p_mesh) {
 
 	mesh = p_mesh;
@@ -336,6 +349,19 @@ void MultiMesh::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_as_bulk_array", "array"), &MultiMesh::set_as_bulk_array);
 	ClassDB::bind_method(D_METHOD("get_aabb"), &MultiMesh::get_aabb);
 
+	ClassDB::bind_method(D_METHOD("get_buffer"), &MultiMesh::get_buffer);
+	ClassDB::bind_method(D_METHOD("set_buffer", "buffer"), &MultiMesh::set_buffer);
+
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "transform_format", PROPERTY_HINT_ENUM, "2D,3D"), "set_transform_format", "get_transform_format");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_colors"), "set_use_colors", "is_using_colors");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_custom_data"), "set_use_custom_data", "is_using_custom_data");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "instance_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"), "set_instance_count", "get_instance_count");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "visible_instance_count", PROPERTY_HINT_RANGE, "-1,16384,1,or_greater"), "set_visible_instance_count", "get_visible_instance_count");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh", PROPERTY_HINT_RESOURCE_TYPE, "Mesh"), "set_mesh", "get_mesh");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_REAL_ARRAY, "buffer", PROPERTY_HINT_NONE), "set_buffer", "get_buffer");
+
+#ifndef DISABLE_DEPRECATED
+	// Kept for compatibility from 3.x to 4.0.
 	ClassDB::bind_method(D_METHOD("_set_transform_array"), &MultiMesh::_set_transform_array);
 	ClassDB::bind_method(D_METHOD("_get_transform_array"), &MultiMesh::_get_transform_array);
 	ClassDB::bind_method(D_METHOD("_set_transform_2d_array"), &MultiMesh::_set_transform_2d_array);
@@ -345,16 +371,11 @@ void MultiMesh::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("_set_custom_data_array"), &MultiMesh::_set_custom_data_array);
 	ClassDB::bind_method(D_METHOD("_get_custom_data_array"), &MultiMesh::_get_custom_data_array);
 
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "color_format", PROPERTY_HINT_ENUM, "None,Byte,Float"), "set_color_format", "get_color_format");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "transform_format", PROPERTY_HINT_ENUM, "2D,3D"), "set_transform_format", "get_transform_format");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "custom_data_format", PROPERTY_HINT_ENUM, "None,Byte,Float"), "set_custom_data_format", "get_custom_data_format");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "instance_count", PROPERTY_HINT_RANGE, "0,16384,1,or_greater"), "set_instance_count", "get_instance_count");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "visible_instance_count", PROPERTY_HINT_RANGE, "-1,16384,1,or_greater"), "set_visible_instance_count", "get_visible_instance_count");
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh", PROPERTY_HINT_RESOURCE_TYPE, "Mesh"), "set_mesh", "get_mesh");
-	ADD_PROPERTY(PropertyInfo(Variant::POOL_VECTOR3_ARRAY, "transform_array", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR | PROPERTY_USAGE_INTERNAL), "_set_transform_array", "_get_transform_array");
-	ADD_PROPERTY(PropertyInfo(Variant::POOL_VECTOR2_ARRAY, "transform_2d_array", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR | PROPERTY_USAGE_INTERNAL), "_set_transform_2d_array", "_get_transform_2d_array");
-	ADD_PROPERTY(PropertyInfo(Variant::POOL_COLOR_ARRAY, "color_array", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR | PROPERTY_USAGE_INTERNAL), "_set_color_array", "_get_color_array");
-	ADD_PROPERTY(PropertyInfo(Variant::POOL_COLOR_ARRAY, "custom_data_array", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR | PROPERTY_USAGE_INTERNAL), "_set_custom_data_array", "_get_custom_data_array");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR3_ARRAY, "transform_array", PROPERTY_HINT_NONE, "", 0), "_set_transform_array", "_get_transform_array");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR2_ARRAY, "transform_2d_array", PROPERTY_HINT_NONE, "", 0), "_set_transform_2d_array", "_get_transform_2d_array");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_COLOR_ARRAY, "color_array", PROPERTY_HINT_NONE, "", 0), "_set_color_array", "_get_color_array");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_COLOR_ARRAY, "custom_data_array", PROPERTY_HINT_NONE, "", 0), "_set_custom_data_array", "_get_custom_data_array");
+#endif
 
 	BIND_ENUM_CONSTANT(TRANSFORM_2D);
 	BIND_ENUM_CONSTANT(TRANSFORM_3D);
