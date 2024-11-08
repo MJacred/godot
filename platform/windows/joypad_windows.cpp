@@ -46,13 +46,17 @@ DWORD WINAPI _xinput_set_state(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration) 
 	return ERROR_DEVICE_NOT_CONNECTED;
 }
 
+MMRESULT WINAPI _winmm_get_joycaps(UINT uJoyID, LPJOYCAPS pjc, UINT cbjc) {
+	return MMSYSERR_NODRIVER;
+}
+
 JoypadWindows::JoypadWindows() {
 }
 
 JoypadWindows::JoypadWindows(HWND *hwnd) {
 	input = Input::get_singleton();
 	hWnd = hwnd;
-	joypad_count = 0;
+	d_joypad_count = 0;
 	dinput = nullptr;
 	xinput_dll = nullptr;
 	xinput_get_state = nullptr;
@@ -79,14 +83,15 @@ JoypadWindows::JoypadWindows(HWND *hwnd) {
 }
 
 JoypadWindows::~JoypadWindows() {
-	close_joypad();
+	close_d_joypad();
 	if (dinput) {
 		dinput->Release();
 	}
+	unload_winmm();
 	unload_xinput();
 }
 
-bool JoypadWindows::have_device(const GUID &p_guid) {
+bool JoypadWindows::have_d_device(const GUID &p_guid) {
 	for (int i = 0; i < JOYPADS_MAX; i++) {
 		if (d_joypads[i].guid == p_guid) {
 			d_joypads[i].confirmed = true;
@@ -164,7 +169,7 @@ bool JoypadWindows::setup_dinput_joypad(const DIDEVICEINSTANCE *instance) {
 	HRESULT hr;
 	int num = input->get_unused_joy_id();
 
-	if (have_device(instance->guidInstance) || num == -1) {
+	if (have_d_device(instance->guidInstance) || num == -1) {
 		return false;
 	}
 
@@ -193,6 +198,10 @@ bool JoypadWindows::setup_dinput_joypad(const DIDEVICEINSTANCE *instance) {
 	WORD version = 0;
 	sprintf_s(uid, "%04x%04x%04x%04x%04x%04x%04x%04x", type, 0, vendor, 0, product, 0, version, 0);
 
+	Dictionary joypad_info;
+	joypad_info["vendor_id"] = itos(vendor);
+	joypad_info["product_id"] = itos(product);
+
 	id_to_change = num;
 	slider_count = 0;
 
@@ -202,12 +211,12 @@ bool JoypadWindows::setup_dinput_joypad(const DIDEVICEINSTANCE *instance) {
 	joy->joy_axis.sort();
 
 	joy->guid = instance->guidInstance;
-	input->joy_connection_changed(num, true, instance->tszProductName, uid);
+	input->joy_connection_changed(num, true, instance->tszProductName, uid, joypad_info);
 	joy->attached = true;
 	joy->id = num;
 	attached_joypads[num] = true;
 	joy->confirmed = true;
-	joypad_count++;
+	d_joypad_count++;
 	return true;
 }
 
@@ -284,10 +293,10 @@ BOOL CALLBACK JoypadWindows::objectsCallback(const DIDEVICEOBJECTINSTANCE *p_ins
 	return DIENUM_CONTINUE;
 }
 
-void JoypadWindows::close_joypad(int id) {
+void JoypadWindows::close_d_joypad(int id) {
 	if (id == -1) {
 		for (int i = 0; i < JOYPADS_MAX; i++) {
-			close_joypad(i);
+			close_d_joypad(i);
 		}
 		return;
 	}
@@ -302,12 +311,16 @@ void JoypadWindows::close_joypad(int id) {
 	attached_joypads[d_joypads[id].id] = false;
 	d_joypads[id].guid.Data1 = d_joypads[id].guid.Data2 = d_joypads[id].guid.Data3 = 0;
 	input->joy_connection_changed(d_joypads[id].id, false, "");
-	joypad_count--;
+	d_joypad_count--;
 }
 
 void JoypadWindows::probe_joypads() {
 	ERR_FAIL_NULL_MSG(dinput, "DirectInput not initialized. Rebooting your PC may solve this issue.");
+
+	// Handle connect, disconnect & re-connect for DirectX joypads.
 	DWORD dwResult;
+	JOYCAPS jc;
+	MMRESULT jcResult;
 	for (DWORD i = 0; i < XUSER_MAX_COUNT; i++) {
 		ZeroMemory(&x_joypads[i].state, sizeof(XINPUT_STATE));
 
@@ -322,7 +335,17 @@ void JoypadWindows::probe_joypads() {
 				x_joypads[i].vibrating = false;
 				attached_joypads[id] = true;
 				Dictionary joypad_info;
+
 				joypad_info["xinput_index"] = (int)i;
+
+				memset(&jc, 0, sizeof(JOYCAPS));
+				jcResult = winmm_get_joycaps((UINT)id, &jc, sizeof(JOYCAPS));
+				if (jcResult == JOYERR_NOERROR) {
+					joypad_info["vendor_id"] = itos(jc.wMid);
+					joypad_info["product_id"] = itos(jc.wPid);
+					joypad_info["xinput_name"] = String(jc.szPname);
+				}
+
 				input->joy_connection_changed(id, true, "XInput Gamepad", "__XINPUT_DEVICE__", joypad_info);
 			}
 		} else if (x_joypads[i].attached) {
@@ -332,15 +355,16 @@ void JoypadWindows::probe_joypads() {
 		}
 	}
 
-	for (int i = 0; i < joypad_count; i++) {
+	// Handle connect, disconnect & re-connect for DirectInput joypads.
+	for (int i = 0; i < d_joypad_count; i++) {
 		d_joypads[i].confirmed = false;
 	}
 
 	dinput->EnumDevices(DI8DEVCLASS_GAMECTRL, enumCallback, this, DIEDFL_ATTACHEDONLY);
 
-	for (int i = 0; i < joypad_count; i++) {
+	for (int i = 0; i < d_joypad_count; i++) {
 		if (!d_joypads[i].confirmed) {
-			close_joypad(i);
+			close_d_joypad(i);
 		}
 	}
 }
@@ -348,6 +372,7 @@ void JoypadWindows::probe_joypads() {
 void JoypadWindows::process_joypads() {
 	HRESULT hr;
 
+	// Handle DirectX joypads.
 	for (int i = 0; i < XUSER_MAX_COUNT; i++) {
 		xinput_gamepad &joy = x_joypads[i];
 		if (!joy.attached) {
@@ -388,6 +413,7 @@ void JoypadWindows::process_joypads() {
 		}
 	}
 
+	// Handle DirectIndput joypads.
 	for (int i = 0; i < JOYPADS_MAX; i++) {
 		dinput_gamepad *joy = &d_joypads[i];
 
@@ -535,7 +561,9 @@ void JoypadWindows::joypad_vibration_stop_xinput(int p_device, uint64_t p_timest
 void JoypadWindows::load_xinput() {
 	xinput_get_state = &_xinput_get_state;
 	xinput_set_state = &_xinput_set_state;
+	winmm_get_joycaps = &_winmm_get_joycaps;
 	bool legacy_xinput = false;
+
 	xinput_dll = LoadLibrary("XInput1_4.dll");
 	if (!xinput_dll) {
 		xinput_dll = LoadLibrary("XInput1_3.dll");
@@ -560,10 +588,25 @@ void JoypadWindows::load_xinput() {
 	}
 	xinput_get_state = func;
 	xinput_set_state = set_func;
+
+	winmm_dll = LoadLibrary("Winmm.dll");
+	if (winmm_dll) {
+		winmm_get_joycaps = (joyGetDevCaps_t)GetProcAddress((HMODULE)winmm_dll, "joyGetDevCaps");
+		if (!winmm_get_joycaps) {
+			unload_winmm();
+			return;
+		}
+	}
 }
 
 void JoypadWindows::unload_xinput() {
 	if (xinput_dll) {
 		FreeLibrary((HMODULE)xinput_dll);
+	}
+}
+
+void JoypadWindows::unload_winmm() {
+	if (winmm_dll) {
+		FreeLibrary((HMODULE)winmm_dll);
 	}
 }

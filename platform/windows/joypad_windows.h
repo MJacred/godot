@@ -37,6 +37,8 @@
 #include <dinput.h>
 #include <xinput.h>
 
+#include <mmsystem.h>
+
 #ifndef SAFE_RELEASE // when Windows Media Device M? is not present
 #define SAFE_RELEASE(x) \
 	if (x != nullptr) { \
@@ -107,14 +109,17 @@ private:
 	typedef DWORD(WINAPI *XInputGetState_t)(DWORD dwUserIndex, XINPUT_STATE *pState);
 	typedef DWORD(WINAPI *XInputSetState_t)(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration);
 
+	typedef MMRESULT(WINAPI *joyGetDevCaps_t)(UINT uJoyID, LPJOYCAPS pjc, UINT cbjc);
+
 	HWND *hWnd = nullptr;
 	HANDLE xinput_dll;
+	HANDLE winmm_dll;
 	LPDIRECTINPUT8 dinput;
 	Input *input = nullptr;
 
 	int id_to_change;
 	int slider_count;
-	int joypad_count;
+	int d_joypad_count;
 	bool attached_joypads[JOYPADS_MAX];
 	dinput_gamepad d_joypads[JOYPADS_MAX];
 	xinput_gamepad x_joypads[XUSER_MAX_COUNT];
@@ -123,13 +128,14 @@ private:
 	static BOOL CALLBACK objectsCallback(const DIDEVICEOBJECTINSTANCE *instance, void *context);
 
 	void setup_joypad_object(const DIDEVICEOBJECTINSTANCE *ob, int p_joy_id);
-	void close_joypad(int id = -1);
+	void close_d_joypad(int id = -1);
 	void load_xinput();
 	void unload_xinput();
+	void unload_winmm();
 
 	void post_hat(int p_device, DWORD p_dpad);
 
-	bool have_device(const GUID &p_guid);
+	bool have_d_device(const GUID &p_guid);
 	bool is_xinput_device(const GUID *p_guid);
 	bool setup_dinput_joypad(const DIDEVICEINSTANCE *instance);
 	void joypad_vibration_start_xinput(int p_device, float p_weak_magnitude, float p_strong_magnitude, float p_duration, uint64_t p_timestamp);
@@ -138,6 +144,7 @@ private:
 	float axis_correct(int p_val, bool p_xinput = false, bool p_trigger = false, bool p_negate = false) const;
 	XInputGetState_t xinput_get_state;
 	XInputSetState_t xinput_set_state;
+	joyGetDevCaps_t winmm_get_joycaps; // Only for reading joypad info on XInput joypads.
 };
 
 #endif // JOYPAD_WINDOWS_H
